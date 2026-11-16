@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { User, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
   BarChart3,
   Briefcase,
@@ -39,7 +39,12 @@ import {
   getCurrentMonthKey,
   getTodayDateStr,
 } from './data/sampleData';
-import { auth, googleProvider } from './firebase';
+import {
+  auth,
+  completeGoogleRedirectResult,
+  signInWithGoogleRedirect,
+  signInWithGoogleSmart,
+} from './firebase';
 import {
   bulkSettleShifts,
   clearUserRecords,
@@ -149,6 +154,34 @@ function loadGuestInitialState(): StoredState {
   };
 }
 
+function formatAuthErrorMessage(error: unknown): string {
+  const errObj = error as { code?: string; message?: string };
+  const code = errObj?.code || '';
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+    return 'Google 로그인 창이 닫혔습니다. 다시 시도해 주세요.';
+  }
+  if (code === 'auth/popup-blocked') {
+    return '브라우저에서 로그인 팝업이 차단되었습니다. 팝업 허용 후 다시 시도하거나 아래 리다이렉트 로그인을 이용해 주세요.';
+  }
+  if (code === 'auth/web-storage-unsupported') {
+    return '브라우저의 서드파티 쿠키/저장소가 차단되어 팝업 로그인이 제한되었습니다. 아래 "새 탭에서 열어 로그인" 또는 "리다이렉트 방식으로 로그인"을 이용해 주세요.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    return `현재 도메인(${host})이 Firebase 인증 허용 도메인에 등록되지 않았습니다. [코드: ${code}]`;
+  }
+  if (code === 'auth/operation-not-allowed') {
+    return `Google 로그인 제공업체가 비활성화되어 있습니다. [코드: ${code}]`;
+  }
+  if (code === 'auth/network-request-failed') {
+    return `네트워크 오류로 로그인 연결에 실패했습니다. [코드: ${code}]`;
+  }
+  if (code === 'auth/internal-error') {
+    return `인증 세션 연결 중 내부 오류가 발생했습니다. 아래 "새 탭에서 열어 로그인" 또는 "리다이렉트 방식으로 로그인"을 시도해 주세요. [코드: ${code}]`;
+  }
+  return `Google 로그인 중 오류가 발생했습니다. (${code || errObj?.message || '알 수 없는 오류'})`;
+}
+
 export default function App() {
   const todayStr = useMemo(() => getTodayDateStr(), []);
 
@@ -191,8 +224,16 @@ export default function App() {
     }, 2600);
   };
 
-  // Firebase Auth 상태 구독
+  // Firebase Auth 상태 구독 및 리다이렉트 로그인 결과 확인
   useEffect(() => {
+    void completeGoogleRedirectResult().catch((error) => {
+      const code = (error as { code?: string })?.code;
+      if (code && code !== 'auth/null-user') {
+        console.error('[Firebase Redirect Auth Error]', error);
+        setAuthError(formatAuthErrorMessage(error));
+      }
+    });
+
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       setAuthReady(true);
@@ -381,17 +422,23 @@ export default function App() {
     setAuthLoading(true);
     setAuthError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithGoogleSmart();
     } catch (error) {
-      const code = (error as { code?: string })?.code;
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        setAuthError('Google 로그인 창이 닫혔습니다. 다시 시도해 주세요.');
-      } else if (code === 'auth/popup-blocked') {
-        setAuthError('브라우저에서 로그인 팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.');
-      } else {
-        setAuthError('Google 로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
-      }
+      console.error('[Firebase Popup Auth Error]', error);
+      setAuthError(formatAuthErrorMessage(error));
     } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleGoogleRedirectSignIn = async () => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      await signInWithGoogleRedirect();
+    } catch (error) {
+      console.error('[Firebase Redirect Trigger Error]', error);
+      setAuthError(formatAuthErrorMessage(error));
       setAuthLoading(false);
     }
   };
@@ -991,9 +1038,29 @@ export default function App() {
           {authError && (
             <div
               role="alert"
-              className="px-3.5 py-2.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg"
+              className="px-3.5 py-3 text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg space-y-2.5"
             >
-              {authError}
+              <p className="leading-relaxed">{authError}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleGoogleRedirectSignIn}
+                  disabled={authLoading}
+                  className="px-2.5 py-1.5 text-[11px] font-semibold text-rose-800 bg-white border border-rose-200 hover:bg-rose-100 rounded-md whitespace-nowrap"
+                >
+                  리다이렉트 방식으로 로그인
+                </button>
+                {typeof window !== 'undefined' && window.self !== window.top && (
+                  <a
+                    href={window.location.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-md whitespace-nowrap"
+                  >
+                    새 탭에서 열어 로그인
+                  </a>
+                )}
+              </div>
             </div>
           )}
 
