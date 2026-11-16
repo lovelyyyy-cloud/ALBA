@@ -1,4 +1,4 @@
-import { AppSettings, JobProfile, WorkShift } from '../types/work';
+import { AccountBookEntry, AppSettings, JobProfile, WorkShift } from '../types/work';
 import { getAdjacentMonthKey } from '../utils/payroll';
 
 export function getTodayDateStr(): string {
@@ -16,8 +16,11 @@ export function getCurrentMonthKey(): string {
 export const DEFAULT_JOBS: JobProfile[] = [
   {
     id: 'job-logistics',
-    name: '물류센터 단기 (주간)',
-    groupName: '물류·현장',
+    name: '쿠팡 동탄 물류센터',
+    majorCategory: '주간',
+    subCategory: '물류센터',
+    address: '경기도 화성시 동탄순환대로',
+    groupName: '주간',
     roleLabel: '상하차 · 피킹 일용직',
     color: 'blue',
     payType: 'daily',
@@ -35,8 +38,11 @@ export const DEFAULT_JOBS: JobProfile[] = [
   },
   {
     id: 'job-delivery',
-    name: '배달 커넥트 (투잡)',
-    groupName: '배달·투잡',
+    name: '배달 커넥트 (야간 피크)',
+    majorCategory: '야간',
+    subCategory: '배달·라이더',
+    address: '',
+    groupName: '야간',
     roleLabel: '저녁 피크타임 배달',
     color: 'emerald',
     payType: 'piece',
@@ -54,8 +60,11 @@ export const DEFAULT_JOBS: JobProfile[] = [
   },
   {
     id: 'job-cafe',
-    name: '주말 베이커리 카페',
-    groupName: '매장·알바',
+    name: '성수 베이커리 카페',
+    majorCategory: '주말(주간)',
+    subCategory: '카페·베이커리',
+    address: '서울시 성동구 성수이로',
+    groupName: '주말(주간)',
     roleLabel: '주말 마감 파트타임',
     color: 'amber',
     payType: 'hourly',
@@ -353,7 +362,102 @@ export function createSampleShiftsForMonth(monthKey: string): WorkShift[] {
   }));
 }
 
+export function createSampleAccountEntriesForMonth(
+  monthKey: string
+): AccountBookEntry[] {
+  const prevMonthKey = getAdjacentMonthKey(monthKey, -1);
+  const makeDate = (targetMonth: string, day: number) => {
+    const [y, m] = targetMonth.split('-').map(Number);
+    const maxDay = new Date(y, m, 0).getDate();
+    return `${targetMonth}-${String(Math.min(day, maxDay)).padStart(2, '0')}`;
+  };
+
+  const raw: Omit<AccountBookEntry, 'id' | 'createdAt'>[] = [
+    {
+      date: makeDate(prevMonthKey, 1),
+      type: 'fixed',
+      category: '월세·관리비',
+      title: '원룸 월세 및 관리비',
+      amount: 550000,
+      paymentMethod: '계좌이체',
+      memo: '매월 1일 자동이체',
+    },
+    {
+      date: makeDate(prevMonthKey, 10),
+      type: 'fixed',
+      category: '통신·구독',
+      title: '휴대폰 요금 (알뜰폰)',
+      amount: 28000,
+      paymentMethod: '카드',
+    },
+    {
+      date: makeDate(monthKey, 1),
+      type: 'fixed',
+      category: '월세·관리비',
+      title: '원룸 월세 및 관리비',
+      amount: 550000,
+      paymentMethod: '계좌이체',
+      memo: '매월 1일 자동이체',
+    },
+    {
+      date: makeDate(monthKey, 3),
+      type: 'expense',
+      category: '식비',
+      title: '마트 장보기 (주간 식재료)',
+      amount: 64500,
+      paymentMethod: '카드',
+    },
+    {
+      date: makeDate(monthKey, 5),
+      type: 'fixed',
+      category: '통신·구독',
+      title: '휴대폰 요금 (알뜰폰)',
+      amount: 28000,
+      paymentMethod: '카드',
+    },
+    {
+      date: makeDate(monthKey, 7),
+      type: 'expense',
+      category: '교통·주유',
+      title: '대중교통 · K-패스 충전',
+      amount: 45000,
+      paymentMethod: '카드',
+    },
+    {
+      date: makeDate(monthKey, 10),
+      type: 'saving',
+      category: '적금·예금',
+      title: '청년 비상금 적금',
+      amount: 300000,
+      paymentMethod: '계좌이체',
+    },
+    {
+      date: makeDate(monthKey, 12),
+      type: 'expense',
+      category: '식비',
+      title: '근무 후 저녁 식사',
+      amount: 14000,
+      paymentMethod: '현금·체크',
+    },
+    {
+      date: makeDate(monthKey, 14),
+      type: 'expense',
+      category: '생활·쇼핑',
+      title: '방한 작업 장갑 및 생필품',
+      amount: 32000,
+      paymentMethod: '카드',
+    },
+  ];
+
+  return raw.map((item, idx) => ({
+    ...item,
+    id: `sample-acct-${idx + 1}`,
+    createdAt: new Date().toISOString(),
+  }));
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   monthlyGoalNetPay: 2500000,
+  monthlyBudgetLimit: 1200000,
   weekStartsOnMonday: false,
 };

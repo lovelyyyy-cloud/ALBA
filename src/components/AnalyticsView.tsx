@@ -128,7 +128,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                             {item.job.name}
                           </span>
                           <span className="text-[11px] text-slate-400 shrink-0">
-                            {item.job.groupName}
+                            {item.job.majorCategory || '주간'} · {item.job.subCategory || '기타'}
                           </span>
                           <span className="text-slate-500 font-mono-num shrink-0">
                             ({ratio}%)

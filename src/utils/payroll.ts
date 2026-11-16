@@ -1,11 +1,14 @@
 import {
+  EmploymentType,
   GroupMonthlySummary,
   JobColorKey,
+  JobMajorCategory,
   JobMonthlySummary,
   JobProfile,
   MonthlySummary,
   PayCycle,
   PayType,
+  SalaryBreakdown,
   ShiftCalculation,
   ShiftInputMode,
   TaxType,
@@ -13,13 +16,31 @@ import {
   WorkShift,
 } from '../types/work';
 
+export const MAJOR_CATEGORIES: JobMajorCategory[] = [
+  '주간',
+  '야간',
+  '주말(주간)',
+  '주말(야간)',
+];
+
+export const SUB_CATEGORY_PRESETS: string[] = [
+  '물류센터',
+  '식당',
+  '카페·베이커리',
+  '배달·라이더',
+  '건설·현장',
+  '편의점·마트',
+  '사무·보조',
+  '기타',
+];
+
 // 대한민국 연도별 법정 최저시급 (원)
 export const MINIMUM_WAGE_BY_YEAR: Record<number, number> = {
   2023: 9620,
   2024: 9860,
   2025: 10030,
   2026: 10320,
-  2027: 10320, // 미고시 연도는 직전 고시 기준 폴백
+  2027: 10320,
 };
 
 export function getMinimumWageForDate(dateStr: string): { year: number; wage: number } {
@@ -165,13 +186,12 @@ export function calculateTimeBreakdown(
   const start = parseTimeToMinutes(startTime);
   let end = parseTimeToMinutes(endTime);
   if (end <= start) {
-    end += 1440; // 익일 퇴근 처리
+    end += 1440;
   }
   const totalSpan = Math.max(0, end - start);
   const safeBreak = Math.min(totalSpan, Math.max(0, breakMinutes || 0));
   const workedMinutes = totalSpan - safeBreak;
 
-  // 야간근로 구간 (22:00~06:00): [0, 360], [1320, 1800], [2760, 2880]
   const nightSpan =
     overlapMinutes(start, end, 0, 360) +
     overlapMinutes(start, end, 1320, 1800) +
@@ -267,7 +287,6 @@ export function calculateShift(shift: WorkShift, job?: JobProfile): ShiftCalcula
       overtimePay = Math.round(overtimeHours * appliedHourlyRate * 0.5);
     }
   } else {
-    // daily_incentive: 일당(×공수) + 인센티브
     if (shift.manualBasePay !== undefined && shift.manualBasePay !== null && shift.manualBasePay >= 0) {
       const units = shift.workUnits > 0 ? shift.workUnits : 1;
       basePay = Math.round(shift.manualBasePay * units);
@@ -408,8 +427,6 @@ export function calculateMonthlySummary(
     }
   }
 
-  // 주휴수당 자동 계산:
-  // 직장 옵션(includeWeeklyHolidayPay)이 켜져 있거나, 시급 기반(최저시급/임의시급) 근무 기록이 주 15시간 이상인 경우 자동 산정
   const weeklyMap = new Map<
     string,
     { job: JobProfile; mondayStr: string; hours: number; weightedWageSum: number }
@@ -421,7 +438,6 @@ export function calculateMonthlySummary(
     const calc = calculateShift(shift, job);
     const isHourlyMode = calc.inputMode === 'min_wage' || calc.inputMode === 'custom_hourly';
     if (!job.includeWeeklyHolidayPay && !isHourlyMode) continue;
-    // 단, 직장에서 명시적으로 비활성화된 일당제/건당 직장은 제외
     if (!job.includeWeeklyHolidayPay && job.payType === 'piece') continue;
 
     const mondayStr = getMondayOfDate(shift.date);
@@ -495,10 +511,9 @@ export function calculateMonthlySummary(
     })
     .filter((s) => s.shiftCount > 0 || !s.job.archived);
 
-  // 그룹별 취합 (손쉬운 공수/세금/정산 관리용)
   const groupMap = new Map<string, GroupMonthlySummary>();
   for (const js of jobSummaries) {
-    const gName = js.job.groupName?.trim() || '기타 그룹';
+    const gName = js.job.majorCategory || js.job.groupName?.trim() || '주간';
     if (!groupMap.has(gName)) {
       groupMap.set(gName, {
         groupName: gName,
@@ -568,6 +583,148 @@ export function calculateMonthlySummary(
     jobSummaries,
     groupSummaries,
     weeklyHolidayBreakdowns,
+  };
+}
+
+// 대한민국 연봉 실수령액 계산 (4대보험 + 근로소득세 간이세액 근사)
+export function calculateKoreanAnnualSalary(params: {
+  annualSalary: number;
+  employmentType: EmploymentType;
+  contractMonths: number;
+  severanceIncluded: boolean;
+  nonTaxableMonthly: number;
+  dependents: number;
+  childrenCount: number;
+}): SalaryBreakdown {
+  const {
+    annualSalary,
+    employmentType,
+    contractMonths,
+    severanceIncluded,
+    nonTaxableMonthly,
+    dependents,
+    childrenCount,
+  } = params;
+
+  const safeAnnual = Math.max(0, annualSalary);
+  const divisor = severanceIncluded ? 13 : 12;
+  const monthlyGross = Math.round(safeAnnual / divisor);
+  const safeNonTaxable = Math.min(monthlyGross, Math.max(0, nonTaxableMonthly));
+  const monthlyTaxable = Math.max(0, monthlyGross - safeNonTaxable);
+
+  // 1. 국민연금 4.5% (기준소득월액 하한 390,000원 ~ 상한 6,170,000원)
+  const pensionBase =
+    monthlyTaxable > 0 ? Math.min(6170000, Math.max(390000, monthlyTaxable)) : 0;
+  const nationalPension = Math.floor((pensionBase * 0.045) / 10) * 10;
+
+  // 2. 건강보험 3.545%
+  const healthInsurance = Math.floor((monthlyTaxable * 0.03545) / 10) * 10;
+
+  // 3. 장기요양보험 (건강보험료의 12.95%)
+  const longTermCare = Math.floor((healthInsurance * 0.1295) / 10) * 10;
+
+  // 4. 고용보험 0.9%
+  const employmentInsurance = Math.floor((monthlyTaxable * 0.009) / 10) * 10;
+
+  // 5. 근로소득세 (연간 과세급여 기반 근로소득공제 + 인적공제 + 연금보험료공제 + 근로소득세액공제)
+  const annualTaxable = monthlyTaxable * 12;
+  let earnedIncomeDeduction = 0;
+  if (annualTaxable <= 5000000) {
+    earnedIncomeDeduction = annualTaxable * 0.7;
+  } else if (annualTaxable <= 15000000) {
+    earnedIncomeDeduction = 3500000 + (annualTaxable - 5000000) * 0.4;
+  } else if (annualTaxable <= 45000000) {
+    earnedIncomeDeduction = 7500000 + (annualTaxable - 15000000) * 0.15;
+  } else if (annualTaxable <= 100000000) {
+    earnedIncomeDeduction = 12000000 + (annualTaxable - 45000000) * 0.05;
+  } else {
+    earnedIncomeDeduction = 14750000 + (annualTaxable - 100000000) * 0.02;
+  }
+
+  const earnedIncomeAmount = Math.max(0, annualTaxable - earnedIncomeDeduction);
+  const personalDeduction = Math.max(1, dependents) * 1500000;
+  const annualPensionDeduction = nationalPension * 12;
+  // 특별소득공제·표준세액공제 근사 반영 (간이세액표 수준 맞춤)
+  const specialApprox =
+    annualTaxable <= 30000000
+      ? 3100000 + annualTaxable * 0.04
+      : 3600000 + annualTaxable * 0.02;
+
+  const taxBase = Math.max(
+    0,
+    earnedIncomeAmount - personalDeduction - annualPensionDeduction - specialApprox
+  );
+
+  let calculatedTax = 0;
+  if (taxBase <= 14000000) {
+    calculatedTax = taxBase * 0.06;
+  } else if (taxBase <= 50000000) {
+    calculatedTax = 840000 + (taxBase - 14000000) * 0.15;
+  } else if (taxBase <= 88000000) {
+    calculatedTax = 6240000 + (taxBase - 50000000) * 0.24;
+  } else if (taxBase <= 150000000) {
+    calculatedTax = 15360000 + (taxBase - 88000000) * 0.35;
+  } else if (taxBase <= 300000000) {
+    calculatedTax = 37060000 + (taxBase - 150000000) * 0.38;
+  } else {
+    calculatedTax = 94060000 + (taxBase - 300000000) * 0.4;
+  }
+
+  // 근로소득세액공제
+  let taxCredit =
+    calculatedTax <= 1300000
+      ? calculatedTax * 0.55
+      : 715000 + (calculatedTax - 1300000) * 0.3;
+  const maxCredit =
+    annualTaxable <= 33000000 ? 740000 : annualTaxable <= 70000000 ? 660000 : 500000;
+  taxCredit = Math.min(taxCredit, maxCredit);
+
+  // 자녀 세액공제
+  const childCredit =
+    childrenCount <= 0
+      ? 0
+      : childrenCount === 1
+        ? 150000
+        : childrenCount === 2
+          ? 350000
+          : 350000 + (childrenCount - 2) * 300000;
+
+  const annualIncomeTax = Math.max(0, calculatedTax - taxCredit - childCredit);
+  const incomeTax =
+    monthlyTaxable <= 1060000 ? 0 : Math.floor(annualIncomeTax / 12 / 10) * 10;
+  const localIncomeTax = Math.floor((incomeTax * 0.1) / 10) * 10;
+
+  const totalMonthlyDeduction =
+    nationalPension +
+    healthInsurance +
+    longTermCare +
+    employmentInsurance +
+    incomeTax +
+    localIncomeTax;
+
+  const monthlyNet = Math.max(0, monthlyGross - totalMonthlyDeduction);
+  const months = employmentType === '계약직' ? Math.max(1, contractMonths) : 12;
+  const contractTotalGross = monthlyGross * months;
+  const contractTotalNet = monthlyNet * months;
+  const annualNet = monthlyNet * 12;
+  // 1년(12개월) 이상 근무 시 법정 퇴직금 발생
+  const estimatedSeverance = months >= 12 ? monthlyGross : 0;
+
+  return {
+    monthlyGross,
+    monthlyTaxable,
+    nationalPension,
+    healthInsurance,
+    longTermCare,
+    employmentInsurance,
+    incomeTax,
+    localIncomeTax,
+    totalMonthlyDeduction,
+    monthlyNet,
+    annualNet,
+    contractTotalGross,
+    contractTotalNet,
+    estimatedSeverance,
   };
 }
 
@@ -646,8 +803,10 @@ export function exportShiftsToCSV(
 
   const header = [
     '날짜',
-    '그룹',
+    '대분류',
+    '소분류',
     '직장명',
+    '주소',
     '계산방식',
     '근무시간',
     '실근무(h)',
@@ -665,8 +824,10 @@ export function exportShiftsToCSV(
     const calc = calculateShift(shift, job);
     const cols = [
       shift.date,
-      job?.groupName || '기타',
+      job?.majorCategory || '주간',
+      job?.subCategory || '기타',
       job?.name ?? '미지정',
+      `"${(job?.address || '').replace(/"/g, '""')}"`,
       SHIFT_INPUT_MODE_LABELS[calc.inputMode],
       `${shift.startTime}~${shift.endTime}`,
       String(calc.workedHours),

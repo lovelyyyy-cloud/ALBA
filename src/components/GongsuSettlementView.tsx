@@ -121,7 +121,7 @@ export const GongsuSettlementView: React.FC<GongsuSettlementViewProps> = ({
                 >
                   {activeJobs.map((j) => (
                     <option key={j.id} value={j.id}>
-                      [{j.groupName}] {j.name}
+                      [{j.majorCategory || '주간'} · {j.subCategory || '기타'}] {j.name}
                     </option>
                   ))}
                 </select>
@@ -287,9 +287,9 @@ export const GongsuSettlementView: React.FC<GongsuSettlementViewProps> = ({
       <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">그룹별 공수 · 세금 · 정산 현황</h2>
+            <h2 className="text-sm font-bold text-slate-900">대분류(그룹)별 공수 · 세금 · 정산 현황</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              비슷한 업종/현장 그룹 단위로 이번 달 총 공수와 세금, 미정산 금액을 한 번에 정산 관리합니다
+              주간·야간·주말 대분류 단위로 이번 달 총 공수와 세금, 미정산 금액을 한 번에 정산 관리합니다
             </p>
           </div>
           <span className="text-xs font-semibold text-slate-700 font-mono-num">
@@ -394,7 +394,9 @@ export const GongsuSettlementView: React.FC<GongsuSettlementViewProps> = ({
                 <tr key={item.job.id} className="hover:bg-slate-50/70">
                   <td className="py-3 px-4">
                     <div className="font-semibold text-slate-900">{item.job.name}</div>
-                    <div className="text-[11px] text-slate-500">{item.job.groupName}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {item.job.majorCategory || '주간'} · {item.job.subCategory || '기타'}
+                    </div>
                   </td>
                   <td className="py-3 px-3 text-slate-600">{TAX_TYPE_LABELS[item.job.taxType]}</td>
                   <td className="py-3 px-3 text-right font-mono-num text-slate-700">

@@ -1,0 +1,324 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net: Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Primitives
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string
+        && id.size() >= 1
+        && id.size() <= 128
+        && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidTimeString(val) {
+      return val is string
+        && val.size() == 5
+        && val.matches('^[0-2][0-9]:[0-5][0-9]$');
+    }
+
+    function isValidDateString(val) {
+      return val is string
+        && val.size() == 10
+        && val.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['ownerId', 'displayName', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'displayName', 'email', 'photoURL', 'createdAt', 'updatedAt'])
+        && data.ownerId is string && data.ownerId == userId
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPreferences(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'monthlyGoalNetPay', 'monthlyBudgetLimit', 'weekStartsOnMonday', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'monthlyGoalNetPay', 'monthlyBudgetLimit', 'weekStartsOnMonday', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == userId
+        && data.monthlyGoalNetPay is number && data.monthlyGoalNetPay >= 0 && data.monthlyGoalNetPay <= 1000000000
+        && data.monthlyBudgetLimit is number && data.monthlyBudgetLimit >= 0 && data.monthlyBudgetLimit <= 1000000000
+        && data.weekStartsOnMonday is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidJobProfile(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'name', 'majorCategory', 'subCategory', 'groupName', 'roleLabel',
+          'color', 'payType', 'defaultInputMode', 'defaultRate', 'defaultStartTime', 'defaultEndTime',
+          'defaultBreakMinutes', 'taxType', 'payCycle', 'enableNightAllowance',
+          'enableOvertimeAllowance', 'includeWeeklyHolidayPay', 'archived', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'name', 'majorCategory', 'subCategory', 'address', 'groupName', 'roleLabel',
+          'color', 'payType', 'defaultInputMode', 'defaultRate', 'defaultStartTime', 'defaultEndTime',
+          'defaultBreakMinutes', 'taxType', 'customTaxRate', 'payCycle', 'payDayNote',
+          'enableNightAllowance', 'enableOvertimeAllowance', 'includeWeeklyHolidayPay', 'archived',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == userId
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && data.majorCategory is string && data.majorCategory in ['주간', '야간', '주말(주간)', '주말(야간)']
+        && data.subCategory is string && data.subCategory.size() >= 1 && data.subCategory.size() <= 40
+        && (!('address' in data) || (data.address is string && data.address.size() <= 200))
+        && data.groupName is string && data.groupName.size() >= 1 && data.groupName.size() <= 40
+        && data.roleLabel is string && data.roleLabel.size() <= 100
+        && data.color is string && data.color in ['blue', 'emerald', 'amber', 'violet', 'rose', 'cyan']
+        && data.payType is string && data.payType in ['daily', 'hourly', 'piece']
+        && data.defaultInputMode is string && data.defaultInputMode in ['min_wage', 'custom_hourly', 'daily_incentive']
+        && data.defaultRate is number && data.defaultRate >= 0 && data.defaultRate <= 50000000
+        && isValidTimeString(data.defaultStartTime)
+        && isValidTimeString(data.defaultEndTime)
+        && data.defaultBreakMinutes is number && data.defaultBreakMinutes >= 0 && data.defaultBreakMinutes <= 600
+        && data.taxType is string && data.taxType in ['daily_tax', 'freelance_3_3', 'four_insurance', 'none', 'custom']
+        && (!('customTaxRate' in data) || (data.customTaxRate is number && data.customTaxRate >= 0 && data.customTaxRate <= 60))
+        && data.payCycle is string && data.payCycle in ['same_day', 'weekly', 'monthly']
+        && (!('payDayNote' in data) || (data.payDayNote is string && data.payDayNote.size() <= 100))
+        && data.enableNightAllowance is bool
+        && data.enableOvertimeAllowance is bool
+        && data.includeWeeklyHolidayPay is bool
+        && data.archived is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWorkShift(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'date', 'jobId', 'inputMode', 'startTime', 'endTime', 'breakMinutes',
+          'workUnits', 'extraAllowance', 'expenseDeduction', 'paymentStatus', 'memo',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'date', 'jobId', 'inputMode', 'hourlyRateOverride', 'startTime', 'endTime',
+          'breakMinutes', 'workUnits', 'manualBasePay', 'extraAllowance', 'expenseDeduction',
+          'paymentStatus', 'memo', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == userId
+        && isValidDateString(data.date)
+        && isValidId(data.jobId)
+        && data.inputMode is string && data.inputMode in ['min_wage', 'custom_hourly', 'daily_incentive']
+        && (!('hourlyRateOverride' in data) || (data.hourlyRateOverride is number && data.hourlyRateOverride >= 0 && data.hourlyRateOverride <= 5000000))
+        && isValidTimeString(data.startTime)
+        && isValidTimeString(data.endTime)
+        && data.breakMinutes is number && data.breakMinutes >= 0 && data.breakMinutes <= 600
+        && data.workUnits is number && data.workUnits > 0 && data.workUnits <= 10
+        && (!('manualBasePay' in data) || (data.manualBasePay is number && data.manualBasePay >= 0 && data.manualBasePay <= 50000000))
+        && data.extraAllowance is number && data.extraAllowance >= 0 && data.extraAllowance <= 50000000
+        && data.expenseDeduction is number && data.expenseDeduction >= 0 && data.expenseDeduction <= 50000000
+        && data.paymentStatus is string && data.paymentStatus in ['settled', 'pending']
+        && data.memo is string && data.memo.size() <= 300
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAccountBookEntry(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'date', 'type', 'category', 'title', 'amount', 'paymentMethod', 'memo',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'date', 'type', 'category', 'title', 'amount', 'paymentMethod', 'memo',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == userId
+        && isValidDateString(data.date)
+        && data.type is string && data.type in ['expense', 'fixed', 'saving', 'income']
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 40
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 100
+        && data.amount is number && data.amount >= 0 && data.amount <= 500000000
+        && data.paymentMethod is string && data.paymentMethod in ['카드', '현금·체크', '계좌이체']
+        && data.memo is string && data.memo.size() <= 200
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSalarySimulation(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'companyName', 'employmentType', 'contractMonths', 'annualSalary',
+          'severanceIncluded', 'nonTaxableMonthly', 'dependents', 'childrenCount',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'companyName', 'employmentType', 'contractMonths', 'annualSalary',
+          'severanceIncluded', 'nonTaxableMonthly', 'dependents', 'childrenCount',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == userId
+        && data.companyName is string && data.companyName.size() >= 1 && data.companyName.size() <= 80
+        && data.employmentType is string && data.employmentType in ['정규직', '계약직']
+        && data.contractMonths is number && data.contractMonths >= 1 && data.contractMonths <= 120
+        && data.annualSalary is number && data.annualSalary >= 0 && data.annualSalary <= 5000000000
+        && data.severanceIncluded is bool
+        && data.nonTaxableMonthly is number && data.nonTaxableMonthly >= 0 && data.nonTaxableMonthly <= 50000000
+        && data.dependents is number && data.dependents >= 1 && data.dependents <= 20
+        && data.childrenCount is number && data.childrenCount >= 0 && data.childrenCount <= 20
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // 4. Collection Match Rules
+    match /users/{userId}/private/profile {
+      allow get: if isValidId(userId) && isVerifiedOwner(userId);
+      allow create: if isValidId(userId)
+        && isVerifiedOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerifiedOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoURL', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/settings/preferences {
+      allow get: if isValidId(userId) && isVerifiedOwner(userId);
+      allow create: if isValidId(userId)
+        && isVerifiedOwner(userId)
+        && isValidUserPreferences(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerifiedOwner(userId)
+        && isValidUserPreferences(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'monthlyGoalNetPay', 'monthlyBudgetLimit', 'weekStartsOnMonday', 'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && isVerifiedOwner(userId);
+    }
+
+    match /users/{userId}/jobs/{jobId} {
+      allow get: if isValidId(userId) && isValidId(jobId) && isVerifiedOwner(userId);
+      allow list: if isVerifiedOwner(userId) && existing().ownerId == request.auth.uid;
+      allow create: if isValidId(userId)
+        && isValidId(jobId)
+        && isVerifiedOwner(userId)
+        && isValidJobProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidId(jobId)
+        && isVerifiedOwner(userId)
+        && isValidJobProfile(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'majorCategory', 'subCategory', 'address', 'groupName', 'roleLabel',
+          'color', 'payType', 'defaultInputMode', 'defaultRate', 'defaultStartTime', 'defaultEndTime',
+          'defaultBreakMinutes', 'taxType', 'customTaxRate', 'payCycle', 'payDayNote',
+          'enableNightAllowance', 'enableOvertimeAllowance', 'includeWeeklyHolidayPay',
+          'archived', 'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && isValidId(jobId) && isVerifiedOwner(userId);
+    }
+
+    match /users/{userId}/shifts/{shiftId} {
+      allow get: if isValidId(userId) && isValidId(shiftId) && isVerifiedOwner(userId);
+      allow list: if isVerifiedOwner(userId) && existing().ownerId == request.auth.uid;
+      allow create: if isValidId(userId)
+        && isValidId(shiftId)
+        && isVerifiedOwner(userId)
+        && isValidWorkShift(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidId(shiftId)
+        && isVerifiedOwner(userId)
+        && isValidWorkShift(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'updatedAt'])
+          || incoming().diff(existing()).affectedKeys().hasOnly([
+            'date', 'jobId', 'inputMode', 'hourlyRateOverride', 'startTime', 'endTime',
+            'breakMinutes', 'workUnits', 'manualBasePay', 'extraAllowance', 'expenseDeduction',
+            'paymentStatus', 'memo', 'updatedAt'
+          ])
+        );
+      allow delete: if isValidId(userId) && isValidId(shiftId) && isVerifiedOwner(userId);
+    }
+
+    match /users/{userId}/accountEntries/{entryId} {
+      allow get: if isValidId(userId) && isValidId(entryId) && isVerifiedOwner(userId);
+      allow list: if isVerifiedOwner(userId) && existing().ownerId == request.auth.uid;
+      allow create: if isValidId(userId)
+        && isValidId(entryId)
+        && isVerifiedOwner(userId)
+        && isValidAccountBookEntry(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidId(entryId)
+        && isVerifiedOwner(userId)
+        && isValidAccountBookEntry(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'date', 'type', 'category', 'title', 'amount', 'paymentMethod', 'memo', 'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && isValidId(entryId) && isVerifiedOwner(userId);
+    }
+
+    match /users/{userId}/salarySimulations/{simId} {
+      allow get: if isValidId(userId) && isValidId(simId) && isVerifiedOwner(userId);
+      allow list: if isVerifiedOwner(userId) && existing().ownerId == request.auth.uid;
+      allow create: if isValidId(userId)
+        && isValidId(simId)
+        && isVerifiedOwner(userId)
+        && isValidSalarySimulation(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isValidId(simId)
+        && isVerifiedOwner(userId)
+        && isValidSalarySimulation(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'companyName', 'employmentType', 'contractMonths', 'annualSalary',
+          'severanceIncluded', 'nonTaxableMonthly', 'dependents', 'childrenCount', 'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && isValidId(simId) && isVerifiedOwner(userId);
+    }
+  }
+}

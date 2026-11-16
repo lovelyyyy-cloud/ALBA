@@ -255,7 +255,9 @@ export const ShiftEditorForm: React.FC<ShiftEditorFormProps> = ({
                   <span className={`w-2.5 h-2.5 rounded-xs shrink-0 ${colorStyle.swatch}`} />
                   <div className="min-w-0">
                     <div className="text-xs font-semibold truncate">{job.name}</div>
-                    <div className="text-[10px] text-slate-500 truncate">{job.groupName}</div>
+                    <div className="text-[10px] text-slate-500 truncate">
+                      {job.majorCategory || '주간'} · {job.subCategory || '기타'}
+                    </div>
                   </div>
                 </div>
                 <span className="text-[11px] text-slate-500 shrink-0 font-mono-num">

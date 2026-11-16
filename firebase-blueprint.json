@@ -1,0 +1,426 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private personal account profile for an authenticated user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "displayName", "email", "createdAt", "updatedAt"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "Per-user application preferences such as monthly goal, budget limit, and calendar start day.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "monthlyGoalNetPay": {
+          "type": "number"
+        },
+        "monthlyBudgetLimit": {
+          "type": "number"
+        },
+        "weekStartsOnMonday": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "monthlyGoalNetPay", "monthlyBudgetLimit", "weekStartsOnMonday", "createdAt", "updatedAt"]
+    },
+    "JobProfile": {
+      "title": "JobProfile",
+      "description": "Workplace / job profile configured by a user for daily work tracking.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "majorCategory": {
+          "type": "string",
+          "enum": ["주간", "야간", "주말(주간)", "주말(야간)"]
+        },
+        "subCategory": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "groupName": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "roleLabel": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "color": {
+          "type": "string",
+          "enum": ["blue", "emerald", "amber", "violet", "rose", "cyan"]
+        },
+        "payType": {
+          "type": "string",
+          "enum": ["daily", "hourly", "piece"]
+        },
+        "defaultInputMode": {
+          "type": "string",
+          "enum": ["min_wage", "custom_hourly", "daily_incentive"]
+        },
+        "defaultRate": {
+          "type": "number"
+        },
+        "defaultStartTime": {
+          "type": "string",
+          "maxLength": 5,
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+        },
+        "defaultEndTime": {
+          "type": "string",
+          "maxLength": 5,
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+        },
+        "defaultBreakMinutes": {
+          "type": "number"
+        },
+        "taxType": {
+          "type": "string",
+          "enum": ["daily_tax", "freelance_3_3", "four_insurance", "none", "custom"]
+        },
+        "customTaxRate": {
+          "type": "number"
+        },
+        "payCycle": {
+          "type": "string",
+          "enum": ["same_day", "weekly", "monthly"]
+        },
+        "payDayNote": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "enableNightAllowance": {
+          "type": "boolean"
+        },
+        "enableOvertimeAllowance": {
+          "type": "boolean"
+        },
+        "includeWeeklyHolidayPay": {
+          "type": "boolean"
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "name",
+        "majorCategory",
+        "subCategory",
+        "groupName",
+        "roleLabel",
+        "color",
+        "payType",
+        "defaultInputMode",
+        "defaultRate",
+        "defaultStartTime",
+        "defaultEndTime",
+        "defaultBreakMinutes",
+        "taxType",
+        "payCycle",
+        "enableNightAllowance",
+        "enableOvertimeAllowance",
+        "includeWeeklyHolidayPay",
+        "archived",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "WorkShift": {
+      "title": "WorkShift",
+      "description": "Individual daily work shift entry owned by a user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "jobId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "inputMode": {
+          "type": "string",
+          "enum": ["min_wage", "custom_hourly", "daily_incentive"]
+        },
+        "hourlyRateOverride": {
+          "type": "number"
+        },
+        "startTime": {
+          "type": "string",
+          "maxLength": 5,
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+        },
+        "endTime": {
+          "type": "string",
+          "maxLength": 5,
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+        },
+        "breakMinutes": {
+          "type": "number"
+        },
+        "workUnits": {
+          "type": "number"
+        },
+        "manualBasePay": {
+          "type": "number"
+        },
+        "extraAllowance": {
+          "type": "number"
+        },
+        "expenseDeduction": {
+          "type": "number"
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["settled", "pending"]
+        },
+        "memo": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "date",
+        "jobId",
+        "inputMode",
+        "startTime",
+        "endTime",
+        "breakMinutes",
+        "workUnits",
+        "extraAllowance",
+        "expenseDeduction",
+        "paymentStatus",
+        "memo",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AccountBookEntry": {
+      "title": "AccountBookEntry",
+      "description": "Personal household ledger entry owned by a user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["expense", "fixed", "saving", "income"]
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "amount": {
+          "type": "number"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["카드", "현금·체크", "계좌이체"]
+        },
+        "memo": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "date",
+        "type",
+        "category",
+        "title",
+        "amount",
+        "paymentMethod",
+        "memo",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SalarySimulation": {
+      "title": "SalarySimulation",
+      "description": "Saved annual salary simulation owned by a user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "companyName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "employmentType": {
+          "type": "string",
+          "enum": ["정규직", "계약직"]
+        },
+        "contractMonths": {
+          "type": "number"
+        },
+        "annualSalary": {
+          "type": "number"
+        },
+        "severanceIncluded": {
+          "type": "boolean"
+        },
+        "nonTaxableMonthly": {
+          "type": "number"
+        },
+        "dependents": {
+          "type": "number"
+        },
+        "childrenCount": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "companyName",
+        "employmentType",
+        "contractMonths",
+        "annualSalary",
+        "severanceIncluded",
+        "nonTaxableMonthly",
+        "dependents",
+        "childrenCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/private/profile": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account profile isolated per authenticated user."
+    },
+    "/users/{userId}/settings/preferences": {
+      "schema": { "$ref": "#/entities/UserPreferences" },
+      "description": "User personal budget, goal, and calendar preferences."
+    },
+    "/users/{userId}/jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/JobProfile" },
+      "description": "User-owned workplace configurations."
+    },
+    "/users/{userId}/shifts/{shiftId}": {
+      "schema": { "$ref": "#/entities/WorkShift" },
+      "description": "User-owned daily work shift records."
+    },
+    "/users/{userId}/accountEntries/{entryId}": {
+      "schema": { "$ref": "#/entities/AccountBookEntry" },
+      "description": "User-owned household ledger entries."
+    },
+    "/users/{userId}/salarySimulations/{simId}": {
+      "schema": { "$ref": "#/entities/SalarySimulation" },
+      "description": "User-owned annual salary simulations."
+    }
+  }
+}
